@@ -112,11 +112,11 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error:any) {
     console.error("Google Auth Error:", error.response?.data || error.message);
 
     return NextResponse.json(
-      { error: "Google authentication failed" },
+      { message: "Google authentication failed" },
       { status: 500 }
     );
   }
