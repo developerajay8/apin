@@ -5,12 +5,17 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 
+interface LoginForm {
+  email: string;
+  password: string;
+}
+
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const code = searchParams.get("code");
 
-  const [user, setUser] = useState({
+  const [user, setUser] = useState<LoginForm>({
     email: "",
     password: "",
   });
@@ -18,11 +23,13 @@ export default function LoginClient() {
   const [buttonDisabled, setButtonDisabled] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // Error states
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
-  // Google login handler
+  /* -----------------------------------------
+     Google Login
+  ------------------------------------------ */
+
   const handleGoogleLogin = () => {
     const params = new URLSearchParams({
       client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
@@ -32,10 +39,14 @@ export default function LoginClient() {
       prompt: "select_account",
     });
 
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    window.location.href =
+      `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   };
 
-  // Google OAuth callback: code milne ke baad API call karna
+  /* -----------------------------------------
+     Google OAuth callback
+  ------------------------------------------ */
+
   useEffect(() => {
     if (!code) return;
 
@@ -44,7 +55,7 @@ export default function LoginClient() {
         setLoading(true);
         await axios.post("/api/users/google", { code });
         router.push("/profile");
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Google login failed", error);
       } finally {
         setLoading(false);
@@ -52,7 +63,11 @@ export default function LoginClient() {
     };
 
     googleAuth();
-  }, [code]);
+  }, [code, router]); // ✅ router added
+
+  /* -----------------------------------------
+     Normal Login
+  ------------------------------------------ */
 
   const onLogin = async () => {
     try {
@@ -64,24 +79,37 @@ export default function LoginClient() {
       console.log("Login success", response.data);
 
       router.push("/profile");
-    } catch (error: any) {
-      console.log("Login failed", error);
 
-      const errMsg = error.response?.data?.error;
+    } catch (error: unknown) {
 
-      if (errMsg === "User not found") {
-        setEmailError("Email not found");
-      } else if (errMsg === "Invalid password") {
-        setPasswordError("Incorrect password");
-      } else if (errMsg === "Please verify your OTP first") {
-        setEmailError("Please verify your OTP first");
+      if (axios.isAxiosError(error)) {
+        const errMsg =
+          (error.response?.data as { error?: string })?.error;
+
+        if (errMsg === "User not found") {
+          setEmailError("Email not found");
+        } else if (errMsg === "Invalid password") {
+          setPasswordError("Incorrect password");
+        } else if (errMsg === "Please verify your OTP first") {
+          setEmailError("Please verify your OTP first");
+        } else {
+          setEmailError("Something went wrong. Try again");
+        }
+
+      } else if (error instanceof Error) {
+        setEmailError(error.message);
       } else {
         setEmailError("Something went wrong. Try again");
       }
+
     } finally {
       setLoading(false);
     }
   };
+
+  /* -----------------------------------------
+     Button Enable / Disable
+  ------------------------------------------ */
 
   useEffect(() => {
     if (user.email.length > 0 && user.password.length > 0) {
@@ -94,7 +122,7 @@ export default function LoginClient() {
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-linear-to-br from-black via-gray-900 to-black px-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl p-6 sm:p-8">
-        {/* Heading */}
+
         <div className="mb-6 text-center">
           <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
             {loading ? "Processing..." : "Login"}
@@ -104,7 +132,7 @@ export default function LoginClient() {
           </p>
         </div>
 
-        {/* Google Login Button */}
+        {/* Google Button */}
         <button
           onClick={handleGoogleLogin}
           className="w-full mb-4 rounded-xl py-3 bg-white text-black font-semibold transition active:scale-[0.98]"
@@ -116,19 +144,17 @@ export default function LoginClient() {
 
         {/* Email */}
         <div className="mb-4">
-          <label
-            htmlFor="email"
-            className="block text-sm font-medium text-gray-200 mb-2"
-          >
+          <label className="block text-sm font-medium text-gray-200 mb-2">
             Email
           </label>
           <input
-            id="email"
             value={user.email}
-            onChange={(e) => setUser({ ...user, email: e.target.value })}
-            placeholder="Enter your email"
+            onChange={(e) =>
+              setUser({ ...user, email: e.target.value })
+            }
             type="email"
-            className={`w-full rounded-xl bg-black/30 border px-4 py-3 text-white placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-white/20 focus:border-white/20 transition
+            placeholder="Enter your email"
+            className={`w-full rounded-xl bg-black/30 border px-4 py-3 text-white outline-none focus:ring-2 focus:ring-white/20 transition
               ${emailError ? "border-red-500" : "border-white/10"}`}
           />
           {emailError && (
@@ -138,19 +164,17 @@ export default function LoginClient() {
 
         {/* Password */}
         <div className="mb-6">
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium text-gray-200 mb-2"
-          >
+          <label className="block text-sm font-medium text-gray-200 mb-2">
             Password
           </label>
           <input
-            id="password"
             value={user.password}
-            onChange={(e) => setUser({ ...user, password: e.target.value })}
-            placeholder="Enter your password"
+            onChange={(e) =>
+              setUser({ ...user, password: e.target.value })
+            }
             type="password"
-            className={`w-full rounded-xl bg-black/30 border px-4 py-3 text-white placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-white/20 focus:border-white/20 transition
+            placeholder="Enter your password"
+            className={`w-full rounded-xl bg-black/30 border px-4 py-3 text-white outline-none focus:ring-2 focus:ring-white/20 transition
               ${passwordError ? "border-red-500" : "border-white/10"}`}
           />
           {passwordError && (
@@ -160,29 +184,26 @@ export default function LoginClient() {
 
         <div className="flex items-end justify-end pb-3">
           <Link
-            // href="/forgotpassword"
-                href="/forgot-password"
+            href="/forgot-password"
             className="text-sm text-gray-300 hover:text-white underline underline-offset-4 transition"
           >
             Forgot password?
           </Link>
         </div>
 
-        {/* Button */}
         <button
           onClick={onLogin}
           disabled={buttonDisabled || loading}
-          className={`w-full rounded-xl py-3 cursor-pointer font-semibold transition active:scale-[0.98]
+          className={`w-full rounded-xl py-3 font-semibold transition active:scale-[0.98]
             ${
               buttonDisabled || loading
                 ? "bg-white/10 text-gray-400 cursor-not-allowed border border-white/10"
                 : "bg-white text-black hover:bg-gray-200"
             }`}
         >
-          {loading ? "Please wait..." : buttonDisabled ? "No Login" : "Login"}
+          {loading ? "Please wait..." : "Login"}
         </button>
 
-        {/* Link */}
         <div className="mt-5 text-center">
           <Link
             href="/signup"

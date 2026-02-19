@@ -1,14 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import axios from "axios";
+import jwt from "jsonwebtoken";
 import User from "@/models/userModel";
 import { connect } from "@/dbConfig/dbConfig";
 
-connect();
+/* --------------------------------------------------
+   Types
+-------------------------------------------------- */
+
+interface GoogleTokenResponse {
+  access_token: string;
+  expires_in: number;
+  token_type: string;
+  scope: string;
+}
+
+interface GoogleUserInfo {
+  id: string;
+  email: string;
+  name: string;
+  picture: string;
+}
+
+interface JwtPayload {
+  id: string;
+  email: string;
+  isAdmin: boolean;
+}
+
+/* --------------------------------------------------
+   POST Route
+-------------------------------------------------- */
 
 export async function POST(request: NextRequest) {
   try {
-    const { code } = await request.json();
+    await connect();
+
+    const body: { code: string } = await request.json();
+    const { code } = body;
 
     if (!code) {
       return NextResponse.json(
@@ -18,9 +47,9 @@ export async function POST(request: NextRequest) {
     }
 
     /* --------------------------------------------------
-       1️⃣ Exchange code → access_token + id_token
+       1️⃣ Exchange code → access_token
     -------------------------------------------------- */
-    const tokenResponse = await axios.post(
+    const tokenResponse = await axios.post<GoogleTokenResponse>(
       "https://oauth2.googleapis.com/token",
       {
         client_id: process.env.GOOGLE_CLIENT_ID,
@@ -43,7 +72,7 @@ export async function POST(request: NextRequest) {
     /* --------------------------------------------------
        2️⃣ Get user info from Google
     -------------------------------------------------- */
-    const userInfoResponse = await axios.get(
+    const userInfoResponse = await axios.get<GoogleUserInfo>(
       "https://www.googleapis.com/oauth2/v2/userinfo",
       {
         headers: {
@@ -62,37 +91,38 @@ export async function POST(request: NextRequest) {
     }
 
     /* --------------------------------------------------
-       3️⃣ Check if user already exists
+       3️⃣ Find or Create User
     -------------------------------------------------- */
     let user = await User.findOne({ email });
 
     if (!user) {
-      // 🆕 New Google user → create account
       user = await User.create({
         username: name || email.split("@")[0],
         email,
         provider: "google",
         googleId: id,
         profileImage: picture,
-        isVerified: true, // ✅ Google users auto-verified
+        isVerified: true,
       });
     }
 
     /* --------------------------------------------------
-       4️⃣ Generate JWT (same as your normal login)
+       4️⃣ Generate JWT
     -------------------------------------------------- */
-    const tokenData = {
-      id: user._id,
+    const tokenData: JwtPayload = {
+      id: user._id.toString(),
       email: user.email,
-      isAdmin: user.isAdmin,
+      isAdmin: user.isAdmin ?? false,
     };
 
-    const token = jwt.sign(tokenData, process.env.TOKEN_SECRET!, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      tokenData,
+      process.env.TOKEN_SECRET as string,
+      { expiresIn: "7d" }
+    );
 
     /* --------------------------------------------------
-       5️⃣ Set cookie & return response
+       5️⃣ Set Cookie & Return Response
     -------------------------------------------------- */
     const response = NextResponse.json({
       message: "Google login successful",
@@ -112,11 +142,22 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error:any) {
-    console.error("Google Auth Error:", error.response?.data || error.message);
+
+  } catch (error: unknown) {
+
+    if (axios.isAxiosError(error)) {
+      console.error(
+        "Google Auth Axios Error:",
+        error.response?.data || error.message
+      );
+    } else if (error instanceof Error) {
+      console.error("Google Auth Error:", error.message);
+    } else {
+      console.error("Unknown Google Auth Error");
+    }
 
     return NextResponse.json(
-      { message: "Google authentication failed" },
+      { error: "Google authentication failed" },
       { status: 500 }
     );
   }

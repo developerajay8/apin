@@ -4,17 +4,37 @@ import { connect } from "@/dbConfig/dbConfig";
 import bcryptjs from "bcryptjs";
 import { sendEmail } from "@/helpers/mailer";
 
+/* --------------------------------------------------
+   Types
+-------------------------------------------------- */
+
+interface SignupRequestBody {
+  username: string;
+  email: string;
+  password: string;
+}
+
+/* --------------------------------------------------
+   POST Route
+-------------------------------------------------- */
+
 export async function POST(request: NextRequest) {
   try {
-    await connect(); // ✅ inside function
+    await connect();
 
-    const reqBody = await request.json();
-    const { username, email, password } = reqBody;
+    const body: SignupRequestBody = await request.json();
+    const { username, email, password } = body;
 
-    console.log("Signup body:", reqBody);
+    if (!username || !email || !password) {
+      return NextResponse.json(
+        { error: "All fields are required" },
+        { status: 400 }
+      );
+    }
 
-    const user = await User.findOne({ email });
-    if (user) {
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
       return NextResponse.json(
         { error: "User already exists" },
         { status: 400 }
@@ -31,26 +51,31 @@ export async function POST(request: NextRequest) {
       isVerified: false,
     });
 
-    // ✅ Send OTP
+    // Send OTP email
     await sendEmail({
       email,
       emailType: "OTP",
       userId: savedUser._id,
     });
 
-    // ✅ fetch updated user (to confirm otp saved)
-    const updatedUser = await User.findById(savedUser._id);
-    console.log("Updated user after OTP:", updatedUser);
-
     return NextResponse.json({
-      message: "Signup success. OTP sent to email",
+      message: "Signup successful. OTP sent to email",
       success: true,
       email,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+  } catch (error: unknown) {
+
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
-
-
-

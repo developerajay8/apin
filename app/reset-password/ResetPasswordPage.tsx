@@ -4,12 +4,19 @@ import axios from "axios";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 
+interface ResetForm {
+  email: string;
+  otp: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 export default function ResetPasswordPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailFromQuery = searchParams.get("email") || "";
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ResetForm>({
     email: emailFromQuery,
     otp: "",
     newPassword: "",
@@ -51,9 +58,18 @@ export default function ResetPasswordPage() {
 
       setSuccessMsg("Password reset successfully! Redirecting...");
       setTimeout(() => router.push("/login"), 1200);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || "Something went wrong";
-      setError(msg);
+    } catch (err: unknown) {
+      // ✅ Type-safe error handling
+      if (axios.isAxiosError(err)) {
+        setError(
+          (err.response?.data as { error?: string })?.error ||
+            "Something went wrong"
+        );
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong");
+      }
     } finally {
       setLoading(false);
     }
@@ -92,7 +108,9 @@ export default function ResetPasswordPage() {
           </label>
           <input
             value={form.newPassword}
-            onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, newPassword: e.target.value })
+            }
             placeholder="Enter new password"
             type="password"
             className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-white placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-white/20 focus:border-white/20 transition"

@@ -24,8 +24,20 @@ export default function VerifyEmailPage() {
 
       alert(res.data.message);
       router.push("/login");
-    } catch (error: any) {
-      alert(error?.response?.data?.error || "Verification failed");
+
+    } catch (error: unknown) {
+
+      if (axios.isAxiosError(error)) {
+        const message =
+          (error.response?.data as { error?: string })?.error ||
+          "Verification failed";
+        alert(message);
+      } else if (error instanceof Error) {
+        alert(error.message);
+      } else {
+        alert("Verification failed");
+      }
+
     } finally {
       setLoading(false);
     }

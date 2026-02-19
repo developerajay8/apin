@@ -14,8 +14,7 @@ export default function ForgotPasswordPage() {
   const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
-    if (email.length > 0) setButtonDisabled(false);
-    else setButtonDisabled(true);
+    setButtonDisabled(email.length === 0);
   }, [email]);
 
   const onSendOtp = async () => {
@@ -28,9 +27,20 @@ export default function ForgotPasswordPage() {
 
       setSuccessMsg("OTP sent to your email!");
       router.push(`/reset-password?email=${encodeURIComponent(email)}`);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || "Something went wrong";
-      setError(msg);
+
+    } catch (err: unknown) {
+
+      if (axios.isAxiosError(err)) {
+        const msg =
+          (err.response?.data as { error?: string })?.error ||
+          "Something went wrong";
+        setError(msg);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong");
+      }
+
     } finally {
       setLoading(false);
     }

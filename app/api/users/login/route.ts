@@ -4,15 +4,42 @@ import { NextRequest, NextResponse } from "next/server";
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+/* --------------------------------------------------
+   Types
+-------------------------------------------------- */
+
+interface LoginRequestBody {
+  email: string;
+  password: string;
+}
+
+interface JwtPayload {
+  id: string;
+  username: string;
+  email: string;
+}
+
+/* --------------------------------------------------
+   POST Route
+-------------------------------------------------- */
+
 export async function POST(request: NextRequest) {
   try {
     await connect();
 
-    const reqBody = await request.json();
-    const { email, password } = reqBody;
+    const body: LoginRequestBody = await request.json();
+    const { email, password } = body;
+
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: "Email and password are required" },
+        { status: 400 }
+      );
+    }
 
     // Find user by email
     const user = await User.findOne({ email });
+
     if (!user) {
       return NextResponse.json(
         { field: "email", error: "User not found" },
@@ -30,6 +57,7 @@ export async function POST(request: NextRequest) {
 
     // Check password
     const validPassword = await bcryptjs.compare(password, user.password);
+
     if (!validPassword) {
       return NextResponse.json(
         { field: "password", error: "Invalid password" },
@@ -38,15 +66,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate JWT token
-    const tokenData = {
-      id: user._id,
+    const tokenData: JwtPayload = {
+      id: user._id.toString(),
       username: user.username,
       email: user.email,
     };
 
-    const token = jwt.sign(tokenData, process.env.TOKEN_SECRET!, {
-      expiresIn: "1d",
-    });
+    const token = jwt.sign(
+      tokenData,
+      process.env.TOKEN_SECRET as string,
+      { expiresIn: "1d" }
+    );
 
     const response = NextResponse.json({
       message: "Login successful",
@@ -62,8 +92,19 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error:any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+  } catch (error: unknown) {
+
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
-
